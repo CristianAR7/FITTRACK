@@ -1,0 +1,126 @@
+import createContextHook from '@nkzw/create-context-hook';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useEffect, useState } from 'react';
+import { AuthState, AuthRole, Gym, User } from '@/types/gym';
+import { mockGyms, mockUsers, mockMasterAccount } from '@/mocks/data';
+
+export const [AuthProvider, useAuth] = createContextHook(() => {
+  const [authState, setAuthState] = useState<AuthState>({
+    role: null,
+    gymId: null,
+    userId: null,
+    gym: null,
+    user: null,
+  });
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    loadAuthState();
+  }, []);
+
+  const loadAuthState = async () => {
+    try {
+      const stored = await AsyncStorage.getItem('authState');
+      if (stored) {
+        setAuthState(JSON.parse(stored));
+      }
+    } catch (error) {
+      console.error('Error loading auth state:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const saveAuthState = async (state: AuthState) => {
+    try {
+      await AsyncStorage.setItem('authState', JSON.stringify(state));
+      setAuthState(state);
+    } catch (error) {
+      console.error('Error saving auth state:', error);
+    }
+  };
+
+  const loginAsGym = async (email: string, password: string): Promise<boolean> => {
+    const gym = mockGyms.find(g => g.email === email && g.password === password);
+    if (gym) {
+      await saveAuthState({
+        role: 'gym',
+        gymId: gym.id,
+        userId: null,
+        gym,
+        user: null,
+      });
+      return true;
+    }
+    return false;
+  };
+
+  const loginAsClient = async (email: string, password: string): Promise<boolean> => {
+    const user = mockUsers.find(u => u.email === email && u.password === password);
+    if (user) {
+      const gym = mockGyms.find(g => g.id === user.gymId);
+      await saveAuthState({
+        role: 'client',
+        gymId: user.gymId,
+        userId: user.id,
+        gym: gym || null,
+        user,
+      });
+      return true;
+    }
+    return false;
+  };
+
+  const loginAsMaster = async (email: string, password: string): Promise<boolean> => {
+    if (email === mockMasterAccount.email && password === mockMasterAccount.password) {
+      await saveAuthState({
+        role: 'master',
+        gymId: null,
+        userId: mockMasterAccount.id,
+        gym: null,
+        user: null,
+        isMaster: true,
+      });
+      return true;
+    }
+    return false;
+  };
+
+  const logout = async () => {
+    await AsyncStorage.removeItem('authState');
+    setAuthState({
+      role: null,
+      gymId: null,
+      userId: null,
+      gym: null,
+      user: null,
+    });
+  };
+
+  const createClient = async (userData: Omit<User, 'id' | 'gymId' | 'createdAt'>): Promise<User> => {
+    if (!authState.gymId) throw new Error('No gym ID');
+    
+    const newUser: User = {
+      ...userData,
+      id: `user_${Date.now()}`,
+      gymId: authState.gymId,
+      createdAt: new Date().toISOString(),
+    };
+    
+    // In a real app, this would save to backend
+    mockUsers.push(newUser);
+    
+    return newUser;
+  };
+
+  return {
+    authState,
+    isLoading,
+    loginAsGym,
+    loginAsClient,
+    loginAsMaster,
+    logout,
+    createClient,
+    isAuthenticated: !!authState.role,
+  };
+});

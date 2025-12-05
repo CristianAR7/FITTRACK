@@ -1,0 +1,430 @@
+import React from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Dimensions,
+} from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { 
+  Activity, 
+  TrendingUp, 
+  Calendar, 
+  Target,
+  Users,
+  DollarSign,
+  UserPlus,
+  ChevronRight,
+  Building2,
+  CreditCard,
+  AlertCircle,
+  BarChart3,
+} from 'lucide-react-native';
+import { useAuth } from '@/hooks/auth-context';
+import { useGymData } from '@/hooks/gym-data-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
+
+const { width } = Dimensions.get('window');
+
+export default function DashboardScreen() {
+  const { authState } = useAuth();
+  const { routines, dietPlans, weightRecords, clients } = useGymData();
+  
+  const isGym = authState.role === 'gym';
+  const isMaster = authState.role === 'master';
+  const userName = authState.user?.name || authState.gym?.name || (isMaster ? 'Master Admin' : 'Usuario');
+  
+  // Calculate stats
+  const activeRoutines = routines.filter(r => 
+    isGym || r.type === 'generic' || r.userId === authState.userId
+  ).length;
+  
+  const activeDietPlans = dietPlans.filter(d => 
+    isGym || d.type === 'generic' || d.userId === authState.userId
+  ).length;
+  
+  const lastWeight = weightRecords[weightRecords.length - 1]?.weight;
+  const previousWeight = weightRecords[weightRecords.length - 2]?.weight;
+  const weightChange = lastWeight && previousWeight ? lastWeight - previousWeight : 0;
+
+  const gymStats = [
+    {
+      title: 'Clientes Activos',
+      value: clients.length.toString(),
+      icon: Users,
+      color: ['#10B981', '#059669'] as const,
+      change: '+2 este mes',
+      route: '/clients',
+    },
+    {
+      title: 'Rutinas Creadas',
+      value: routines.length.toString(),
+      icon: Activity,
+      color: ['#3B82F6', '#2563EB'] as const,
+      change: `${routines.filter(r => r.type === 'specific').length} personalizadas`,
+      route: '/routines',
+    },
+    {
+      title: 'Planes de Dieta',
+      value: dietPlans.length.toString(),
+      icon: Target,
+      color: ['#F59E0B', '#D97706'] as const,
+      change: `${dietPlans.filter(d => d.type === 'specific').length} personalizados`,
+      route: '/diet',
+    },
+    {
+      title: 'Ingresos Mensuales',
+      value: '€2,450',
+      icon: DollarSign,
+      color: ['#8B5CF6', '#7C3AED'] as const,
+      change: '+12% vs mes anterior',
+      route: '/revenue',
+    },
+  ];
+
+  const clientStats = [
+    {
+      title: 'Peso Actual',
+      value: lastWeight ? `${lastWeight} kg` : '--',
+      icon: Activity,
+      color: ['#10B981', '#059669'] as const,
+      change: weightChange ? `${weightChange > 0 ? '+' : ''}${weightChange.toFixed(1)} kg` : 'Sin cambios',
+      route: '/progress',
+    },
+    {
+      title: 'Rutinas Activas',
+      value: activeRoutines.toString(),
+      icon: Calendar,
+      color: ['#3B82F6', '#2563EB'] as const,
+      change: 'Esta semana',
+      route: '/routines',
+    },
+    {
+      title: 'Plan de Dieta',
+      value: activeDietPlans > 0 ? 'Activo' : 'Inactivo',
+      icon: Target,
+      color: ['#F59E0B', '#D97706'] as const,
+      change: activeDietPlans > 0 ? 'Personalizado' : 'Sin asignar',
+      route: '/diet',
+    },
+    {
+      title: 'Objetivo',
+      value: authState.user?.targetWeight ? `${authState.user.targetWeight} kg` : '--',
+      icon: TrendingUp,
+      color: ['#8B5CF6', '#7C3AED'] as const,
+      change: authState.user?.targetWeight && lastWeight 
+        ? `Faltan ${(lastWeight - authState.user.targetWeight).toFixed(1)} kg`
+        : 'Sin definir',
+      route: '/progress',
+    },
+  ];
+
+  const masterStats = [
+    {
+      title: 'Gimnasios Activos',
+      value: '12',
+      icon: Building2,
+      color: ['#10B981', '#059669'] as const,
+      change: '+2 nuevos este mes',
+      route: '/master/gyms',
+    },
+    {
+      title: 'Ingresos Totales',
+      value: '€24,500',
+      icon: DollarSign,
+      color: ['#3B82F6', '#2563EB'] as const,
+      change: '+18% vs mes anterior',
+      route: '/master/total-revenue',
+    },
+    {
+      title: 'Tasa de Retención',
+      value: '92%',
+      icon: BarChart3,
+      color: ['#F59E0B', '#D97706'] as const,
+      change: '8 gimnasios renovados',
+      route: '/master/churn-rate',
+    },
+    {
+      title: 'Pagos Pendientes',
+      value: '2',
+      icon: AlertCircle,
+      color: ['#EF4444', '#DC2626'] as const,
+      change: '€1,200 por cobrar',
+      route: '/master/pending-payments',
+    }
+  ];
+
+  const stats = isMaster ? masterStats : (isGym ? gymStats : clientStats);
+
+  const masterActions = [
+    { title: 'Ver Gimnasios', icon: Building2, route: '/master/gyms' },
+    { title: 'Analytics', icon: BarChart3, route: '/master/total-revenue' },
+    { title: 'Facturación', icon: CreditCard, route: '/master/pending-payments' },
+  ];
+
+  const quickActions = isMaster ? masterActions : (isGym ? [
+    { title: 'Nuevo Cliente', icon: UserPlus, route: '/clients' },
+    { title: 'Crear Rutina', icon: Activity, route: '/routines' },
+    { title: 'Crear Dieta', icon: Target, route: '/diet' },
+  ] : [
+    { title: 'Mi Rutina de Hoy', icon: Activity, route: '/routines' },
+    { title: 'Mi Dieta', icon: Target, route: '/diet' },
+    { title: 'Registrar Peso', icon: TrendingUp, route: '/progress' },
+  ]);
+
+  return (
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <LinearGradient
+        colors={['#1F2937', '#111827']}
+        style={styles.header}
+      >
+        <Text style={styles.greeting}>Bienvenido,</Text>
+        <Text style={styles.userName}>{userName}</Text>
+        <Text style={styles.date}>{new Date().toLocaleDateString('es-ES', { 
+          weekday: 'long', 
+          year: 'numeric', 
+          month: 'long', 
+          day: 'numeric' 
+        })}</Text>
+      </LinearGradient>
+
+      <ScrollView 
+        style={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.statsGrid}>
+          {stats.map((stat, index) => (
+            <TouchableOpacity 
+              key={index} 
+              style={styles.statCard}
+              onPress={() => router.push(stat.route as any)}
+              activeOpacity={0.8}
+            >
+              <LinearGradient
+                colors={stat.color}
+                style={styles.statGradient}
+              >
+                <View style={styles.statHeader}>
+                  <stat.icon size={24} color="#fff" />
+                  <ChevronRight size={16} color="#fff" />
+                </View>
+                <Text style={styles.statValue}>{stat.value}</Text>
+                <Text style={styles.statTitle}>{stat.title}</Text>
+                <Text style={styles.statChange}>{stat.change}</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <View style={styles.quickActionsContainer}>
+          <Text style={styles.sectionTitle}>Acciones Rápidas</Text>
+          <View style={styles.quickActions}>
+            {quickActions.map((action, index) => (
+              <TouchableOpacity 
+                key={index} 
+                style={styles.quickAction}
+                onPress={() => router.push(action.route as any)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.quickActionIcon}>
+                  <action.icon size={24} color="#10B981" />
+                </View>
+                <Text style={styles.quickActionText}>{action.title}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {isMaster && (
+          <View style={styles.recentActivityContainer}>
+            <Text style={styles.sectionTitle}>Actividad Reciente</Text>
+            <View style={styles.recentActivity}>
+              <View style={styles.activityItem}>
+                <View style={[styles.activityDot, { backgroundColor: '#10B981' }]} />
+                <View style={styles.activityContent}>
+                  <Text style={styles.activityDate}>Hace 2 horas</Text>
+                  <Text style={styles.activityText}>PowerGym Madrid renovó suscripción anual</Text>
+                </View>
+              </View>
+              <View style={styles.activityItem}>
+                <View style={[styles.activityDot, { backgroundColor: '#3B82F6' }]} />
+                <View style={styles.activityContent}>
+                  <Text style={styles.activityDate}>Hace 5 horas</Text>
+                  <Text style={styles.activityText}>Nuevo gimnasio registrado: FitLife Barcelona</Text>
+                </View>
+              </View>
+              <View style={styles.activityItem}>
+                <View style={[styles.activityDot, { backgroundColor: '#F59E0B' }]} />
+                <View style={styles.activityContent}>
+                  <Text style={styles.activityDate}>Ayer</Text>
+                  <Text style={styles.activityText}>Pago recibido: €2,450 de 3 gimnasios</Text>
+                </View>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {!isGym && !isMaster && weightRecords.length > 0 && (
+          <View style={styles.recentActivityContainer}>
+            <Text style={styles.sectionTitle}>Evolución Reciente</Text>
+            <View style={styles.recentActivity}>
+              {weightRecords.slice(-3).reverse().map((record, index) => (
+                <View key={index} style={styles.activityItem}>
+                  <View style={styles.activityDot} />
+                  <View style={styles.activityContent}>
+                    <Text style={styles.activityDate}>
+                      {new Date(record.date).toLocaleDateString('es-ES')}
+                    </Text>
+                    <Text style={styles.activityText}>
+                      Peso: {record.weight} kg
+                      {record.bodyFat && ` • Grasa: ${record.bodyFat}%`}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#111827',
+  },
+  header: {
+    padding: 20,
+    paddingBottom: 30,
+  },
+  greeting: {
+    fontSize: 16,
+    color: '#9CA3AF',
+    marginBottom: 4,
+  },
+  userName: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 8,
+  },
+  date: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    textTransform: 'capitalize',
+  },
+  content: {
+    flex: 1,
+    padding: 20,
+    marginTop: -20,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: 24,
+  },
+  statCard: {
+    width: (width - 52) / 2,
+    marginBottom: 12,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  statGradient: {
+    padding: 16,
+    minHeight: 120,
+  },
+  statHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  statValue: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 4,
+  },
+  statTitle: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.9)',
+    marginBottom: 4,
+  },
+  statChange: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.7)',
+  },
+  quickActionsContainer: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 16,
+  },
+  quickActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  quickAction: {
+    flex: 1,
+    alignItems: 'center',
+    backgroundColor: '#1F2937',
+    borderRadius: 12,
+    padding: 16,
+    marginHorizontal: 4,
+  },
+  quickActionIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  quickActionText: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    textAlign: 'center',
+  },
+  recentActivityContainer: {
+    marginBottom: 24,
+  },
+  recentActivity: {
+    backgroundColor: '#1F2937',
+    borderRadius: 12,
+    padding: 16,
+  },
+  activityItem: {
+    flexDirection: 'row',
+    marginBottom: 16,
+  },
+  activityDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#10B981',
+    marginTop: 6,
+    marginRight: 12,
+  },
+  activityContent: {
+    flex: 1,
+  },
+  activityDate: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginBottom: 2,
+  },
+  activityText: {
+    fontSize: 14,
+    color: '#fff',
+  },
+});

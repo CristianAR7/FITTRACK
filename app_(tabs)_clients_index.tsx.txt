@@ -1,0 +1,598 @@
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  TouchableOpacity,
+  TextInput,
+  Modal,
+  ScrollView,
+} from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { 
+  Users,
+  UserPlus,
+  Search,
+  Mail,
+  Calendar,
+  Activity,
+  X,
+  Building2,
+  CreditCard,
+  AlertCircle,
+  CheckCircle,
+} from 'lucide-react-native';
+import { useAuth } from '@/hooks/auth-context';
+import { useGymData } from '@/hooks/gym-data-context';
+import { User, Gym } from '@/types/gym';
+import { mockGyms } from '@/mocks/data';
+
+export default function ClientsScreen() {
+  const { authState, createClient } = useAuth();
+  const { clients, routines, dietPlans } = useGymData();
+  const isMaster = authState.role === 'master';
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newClientForm, setNewClientForm] = useState({
+    name: '',
+    email: '',
+    password: '',
+    birthDate: '',
+    gender: 'male' as 'male' | 'female' | 'other',
+    height: '',
+    currentWeight: '',
+    targetWeight: '',
+  });
+
+  const filteredClients = clients.filter(client =>
+    client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    client.email.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const filteredGyms = mockGyms.filter(gym =>
+    gym.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    gym.email.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const handleCreateClient = async () => {
+    if (!newClientForm.name || !newClientForm.email || !newClientForm.password) {
+      return;
+    }
+
+    await createClient({
+      ...newClientForm,
+      height: parseFloat(newClientForm.height) || 170,
+      currentWeight: parseFloat(newClientForm.currentWeight) || 70,
+      targetWeight: parseFloat(newClientForm.targetWeight) || 70,
+      activityLevel: 'moderate',
+    });
+
+    setNewClientForm({
+      name: '',
+      email: '',
+      password: '',
+      birthDate: '',
+      gender: 'male',
+      height: '',
+      currentWeight: '',
+      targetWeight: '',
+    });
+    setShowAddModal(false);
+  };
+
+  const getClientStats = (client: User) => {
+    const clientRoutines = routines.filter(r => r.userId === client.id).length;
+    const clientDietPlans = dietPlans.filter(d => d.userId === client.id).length;
+    
+    return {
+      routines: clientRoutines,
+      dietPlans: clientDietPlans,
+    };
+  };
+
+  const renderGym = ({ item }: { item: Gym }) => {
+    const isActive = item.subscriptionActive;
+    const daysUntilExpiry = item.subscriptionEndDate 
+      ? Math.ceil((new Date(item.subscriptionEndDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+      : 0;
+
+    return (
+      <TouchableOpacity style={styles.clientCard}>
+        <LinearGradient
+          colors={isActive ? ['#1F2937', '#111827'] : ['#7F1D1D', '#991B1B']}
+          style={styles.clientGradient}
+        >
+          <View style={styles.clientHeader}>
+            <View style={[styles.clientAvatar, { backgroundColor: item.primaryColor || '#10B981' }]}>
+              <Building2 size={24} color="#fff" />
+            </View>
+            <View style={styles.clientInfo}>
+              <Text style={styles.clientName}>{item.name}</Text>
+              <Text style={styles.clientEmail}>{item.email}</Text>
+            </View>
+            <View style={styles.statusBadge}>
+              {isActive ? (
+                <CheckCircle size={20} color="#10B981" />
+              ) : (
+                <AlertCircle size={20} color="#EF4444" />
+              )}
+            </View>
+          </View>
+
+          <View style={styles.clientStats}>
+            <View style={styles.clientStat}>
+              <Users size={14} color="#9CA3AF" />
+              <Text style={styles.clientStatText}>{item.clientCount || 0} clientes</Text>
+            </View>
+            <View style={styles.clientStat}>
+              <CreditCard size={14} color="#9CA3AF" />
+              <Text style={styles.clientStatText}>Plan {item.plan || 'basic'}</Text>
+            </View>
+            <View style={styles.clientStat}>
+              <Calendar size={14} color="#9CA3AF" />
+              <Text style={styles.clientStatText}>
+                {isActive ? `${daysUntilExpiry} días restantes` : 'Expirado'}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.clientMetrics}>
+            <View style={styles.metric}>
+              <Text style={[styles.metricValue, !isActive && styles.expiredText]}>
+                {isActive ? 'Activo' : 'Inactivo'}
+              </Text>
+              <Text style={styles.metricLabel}>Estado</Text>
+            </View>
+            <View style={styles.metric}>
+              <Text style={styles.metricValue}>
+                {item.lastPaymentDate ? new Date(item.lastPaymentDate).toLocaleDateString('es-ES') : '--'}
+              </Text>
+              <Text style={styles.metricLabel}>Último Pago</Text>
+            </View>
+            <View style={styles.metric}>
+              <Text style={styles.metricValue}>
+                {item.subscriptionEndDate ? new Date(item.subscriptionEndDate).toLocaleDateString('es-ES') : '--'}
+              </Text>
+              <Text style={styles.metricLabel}>Vencimiento</Text>
+            </View>
+          </View>
+        </LinearGradient>
+      </TouchableOpacity>
+    );
+  };
+
+  const renderClient = ({ item }: { item: User }) => {
+    const stats = getClientStats(item);
+    const age = item.birthDate 
+      ? new Date().getFullYear() - new Date(item.birthDate).getFullYear()
+      : '--';
+
+    return (
+      <TouchableOpacity style={styles.clientCard}>
+        <LinearGradient
+          colors={['#1F2937', '#111827']}
+          style={styles.clientGradient}
+        >
+          <View style={styles.clientHeader}>
+            <View style={styles.clientAvatar}>
+              <Text style={styles.clientInitial}>
+                {item.name.charAt(0).toUpperCase()}
+              </Text>
+            </View>
+            <View style={styles.clientInfo}>
+              <Text style={styles.clientName}>{item.name}</Text>
+              <Text style={styles.clientEmail}>{item.email}</Text>
+            </View>
+          </View>
+
+          <View style={styles.clientStats}>
+            <View style={styles.clientStat}>
+              <Calendar size={14} color="#9CA3AF" />
+              <Text style={styles.clientStatText}>{age} años</Text>
+            </View>
+            <View style={styles.clientStat}>
+              <Activity size={14} color="#9CA3AF" />
+              <Text style={styles.clientStatText}>
+                {stats.routines} rutinas
+              </Text>
+            </View>
+            <View style={styles.clientStat}>
+              <Mail size={14} color="#9CA3AF" />
+              <Text style={styles.clientStatText}>
+                {stats.dietPlans} dietas
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.clientMetrics}>
+            <View style={styles.metric}>
+              <Text style={styles.metricValue}>{item.currentWeight} kg</Text>
+              <Text style={styles.metricLabel}>Peso Actual</Text>
+            </View>
+            <View style={styles.metric}>
+              <Text style={styles.metricValue}>{item.targetWeight} kg</Text>
+              <Text style={styles.metricLabel}>Objetivo</Text>
+            </View>
+            <View style={styles.metric}>
+              <Text style={styles.metricValue}>{item.height} cm</Text>
+              <Text style={styles.metricLabel}>Altura</Text>
+            </View>
+          </View>
+        </LinearGradient>
+      </TouchableOpacity>
+    );
+  };
+
+  if (isMaster) {
+    const activeGyms = mockGyms.filter(g => g.subscriptionActive).length;
+    const totalClients = mockGyms.reduce((sum, g) => sum + (g.clientCount || 0), 0);
+
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <View style={styles.searchContainer}>
+            <Search size={20} color="#9CA3AF" />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Buscar gimnasios..."
+              placeholderTextColor="#6B7280"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+          </View>
+        </View>
+
+        <View style={styles.statsBar}>
+          <View style={styles.statItem}>
+            <Building2 size={20} color="#10B981" />
+            <Text style={styles.statNumber}>{mockGyms.length}</Text>
+            <Text style={styles.statLabel}>Gimnasios</Text>
+          </View>
+          <View style={[styles.statItem, { marginLeft: 12 }]}>
+            <CheckCircle size={20} color="#10B981" />
+            <Text style={styles.statNumber}>{activeGyms}</Text>
+            <Text style={styles.statLabel}>Activos</Text>
+          </View>
+          <View style={[styles.statItem, { marginLeft: 12 }]}>
+            <Users size={20} color="#10B981" />
+            <Text style={styles.statNumber}>{totalClients}</Text>
+            <Text style={styles.statLabel}>Total Clientes</Text>
+          </View>
+        </View>
+
+        <FlatList
+          data={filteredGyms}
+          renderItem={renderGym}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+        />
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <View style={styles.searchContainer}>
+          <Search size={20} color="#9CA3AF" />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Buscar clientes..."
+            placeholderTextColor="#6B7280"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+        </View>
+
+        <TouchableOpacity 
+          style={styles.addButton}
+          onPress={() => setShowAddModal(true)}
+        >
+          <LinearGradient
+            colors={['#10B981', '#059669']}
+            style={styles.addButtonGradient}
+          >
+            <UserPlus size={20} color="#fff" />
+            <Text style={styles.addButtonText}>Nuevo Cliente</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.statsBar}>
+        <View style={styles.statItem}>
+          <Users size={20} color="#10B981" />
+          <Text style={styles.statNumber}>{clients.length}</Text>
+          <Text style={styles.statLabel}>Total Clientes</Text>
+        </View>
+      </View>
+
+      <FlatList
+        data={filteredClients}
+        renderItem={renderClient}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
+      />
+
+      <Modal
+        visible={showAddModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowAddModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Nuevo Cliente</Text>
+              <TouchableOpacity onPress={() => setShowAddModal(false)}>
+                <X size={24} color="#9CA3AF" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalForm}>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Nombre completo"
+                placeholderTextColor="#6B7280"
+                value={newClientForm.name}
+                onChangeText={(text) => setNewClientForm({...newClientForm, name: text})}
+              />
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Email"
+                placeholderTextColor="#6B7280"
+                value={newClientForm.email}
+                onChangeText={(text) => setNewClientForm({...newClientForm, email: text})}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Contraseña"
+                placeholderTextColor="#6B7280"
+                value={newClientForm.password}
+                onChangeText={(text) => setNewClientForm({...newClientForm, password: text})}
+                secureTextEntry
+              />
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Altura (cm)"
+                placeholderTextColor="#6B7280"
+                value={newClientForm.height}
+                onChangeText={(text) => setNewClientForm({...newClientForm, height: text})}
+                keyboardType="numeric"
+              />
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Peso actual (kg)"
+                placeholderTextColor="#6B7280"
+                value={newClientForm.currentWeight}
+                onChangeText={(text) => setNewClientForm({...newClientForm, currentWeight: text})}
+                keyboardType="numeric"
+              />
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Peso objetivo (kg)"
+                placeholderTextColor="#6B7280"
+                value={newClientForm.targetWeight}
+                onChangeText={(text) => setNewClientForm({...newClientForm, targetWeight: text})}
+                keyboardType="numeric"
+              />
+            </ScrollView>
+
+            <TouchableOpacity 
+              style={styles.modalButton}
+              onPress={handleCreateClient}
+            >
+              <LinearGradient
+                colors={['#10B981', '#059669']}
+                style={styles.modalButtonGradient}
+              >
+                <Text style={styles.modalButtonText}>Crear Cliente</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#111827',
+  },
+  header: {
+    padding: 16,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1F2937',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    marginBottom: 16,
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: 12,
+    marginLeft: 8,
+    fontSize: 16,
+    color: '#fff',
+  },
+  addButton: {
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  addButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 14,
+    gap: 8,
+  },
+  addButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  statsBar: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    marginBottom: 16,
+    flexWrap: 'wrap',
+  },
+  statItem: {
+    backgroundColor: '#1F2937',
+    borderRadius: 12,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  statusBadge: {
+    marginLeft: 'auto',
+  },
+  expiredText: {
+    color: '#EF4444',
+  },
+  statNumber: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  statLabel: {
+    fontSize: 14,
+    color: '#9CA3AF',
+  },
+  listContent: {
+    padding: 16,
+    paddingTop: 0,
+  },
+  clientCard: {
+    marginBottom: 16,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  clientGradient: {
+    padding: 16,
+  },
+  clientHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  clientAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#10B981',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  clientInitial: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  clientInfo: {
+    flex: 1,
+  },
+  clientName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 2,
+  },
+  clientEmail: {
+    fontSize: 14,
+    color: '#9CA3AF',
+  },
+  clientStats: {
+    flexDirection: 'row',
+    gap: 16,
+    marginBottom: 12,
+  },
+  clientStat: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  clientStatText: {
+    fontSize: 12,
+    color: '#9CA3AF',
+  },
+  clientMetrics: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(156, 163, 175, 0.2)',
+  },
+  metric: {
+    alignItems: 'center',
+  },
+  metricValue: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 2,
+  },
+  metricLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#1F2937',
+    borderRadius: 20,
+    padding: 24,
+    width: '90%',
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  modalForm: {
+    marginBottom: 20,
+  },
+  modalInput: {
+    backgroundColor: 'rgba(17, 24, 39, 0.5)',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+    color: '#fff',
+    fontSize: 16,
+  },
+  modalButton: {
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  modalButtonGradient: {
+    padding: 14,
+    alignItems: 'center',
+  },
+  modalButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+});

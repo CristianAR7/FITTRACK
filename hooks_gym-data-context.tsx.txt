@@ -1,0 +1,253 @@
+import createContextHook from '@nkzw/create-context-hook';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useEffect, useState } from 'react';
+import { Routine, DietPlan, WeightRecord, Measurements, Exercise, User } from '@/types/gym';
+import { mockRoutines, mockDietPlans, mockWeightRecords, mockMeasurements, mockExercises, mockUsers } from '@/mocks/data';
+import { useAuth } from './auth-context';
+
+interface GymData {
+  routines: Routine[];
+  dietPlans: DietPlan[];
+  weightRecords: WeightRecord[];
+  measurements: Measurements[];
+  exercises: Exercise[];
+  clients: User[];
+}
+
+export const [GymDataProvider, useGymData] = createContextHook(() => {
+  const { authState } = useAuth();
+  const [data, setData] = useState<GymData>({
+    routines: [],
+    dietPlans: [],
+    weightRecords: [],
+    measurements: [],
+    exercises: mockExercises,
+    clients: [],
+  });
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    loadData();
+  }, [authState.gymId, authState.userId]);
+
+  const loadData = async () => {
+    if (!authState.gymId) {
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      // Load from AsyncStorage or use mock data
+      const storedData = await AsyncStorage.getItem(`gymData_${authState.gymId}`);
+      
+      if (storedData) {
+        setData(JSON.parse(storedData));
+      } else {
+        // Filter data based on gym and user
+        const gymRoutines = mockRoutines.filter(r => r.gymId === authState.gymId);
+        const gymDietPlans = mockDietPlans.filter(d => d.gymId === authState.gymId);
+        const gymClients = mockUsers.filter(u => u.gymId === authState.gymId);
+        
+        let userRoutines = gymRoutines;
+        let userDietPlans = gymDietPlans;
+        let userWeightRecords = mockWeightRecords;
+        let userMeasurements = mockMeasurements;
+        
+        if (authState.role === 'client' && authState.userId) {
+          userRoutines = gymRoutines.filter(r => r.type === 'generic' || r.userId === authState.userId);
+          userDietPlans = gymDietPlans.filter(d => d.type === 'generic' || d.userId === authState.userId);
+          userWeightRecords = mockWeightRecords.filter(w => w.userId === authState.userId);
+          userMeasurements = mockMeasurements.filter(m => m.userId === authState.userId);
+        }
+        
+        setData({
+          routines: userRoutines,
+          dietPlans: userDietPlans,
+          weightRecords: userWeightRecords,
+          measurements: userMeasurements,
+          exercises: mockExercises,
+          clients: gymClients,
+        });
+      }
+    } catch (error) {
+      console.error('Error loading gym data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const saveData = async (newData: GymData) => {
+    if (!authState.gymId) return;
+    
+    try {
+      await AsyncStorage.setItem(`gymData_${authState.gymId}`, JSON.stringify(newData));
+      setData(newData);
+    } catch (error) {
+      console.error('Error saving gym data:', error);
+    }
+  };
+
+  const addRoutine = async (routine: Omit<Routine, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const newRoutine: Routine = {
+      ...routine,
+      id: `routine_${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    
+    const updatedData = {
+      ...data,
+      routines: [...data.routines, newRoutine],
+    };
+    
+    await saveData(updatedData);
+    return newRoutine;
+  };
+
+  const addDietPlan = async (dietPlan: Omit<DietPlan, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const newDietPlan: DietPlan = {
+      ...dietPlan,
+      id: `diet_${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    
+    const updatedData = {
+      ...data,
+      dietPlans: [...data.dietPlans, newDietPlan],
+    };
+    
+    await saveData(updatedData);
+    return newDietPlan;
+  };
+
+  const addWeightRecord = async (record: Omit<WeightRecord, 'id'>) => {
+    const newRecord: WeightRecord = {
+      ...record,
+      id: `wr_${Date.now()}`,
+    };
+    
+    const updatedData = {
+      ...data,
+      weightRecords: [...data.weightRecords, newRecord],
+    };
+    
+    await saveData(updatedData);
+    return newRecord;
+  };
+
+  const addMeasurement = async (measurement: Omit<Measurements, 'id'>) => {
+    const newMeasurement: Measurements = {
+      ...measurement,
+      id: `m_${Date.now()}`,
+    };
+    
+    const updatedData = {
+      ...data,
+      measurements: [...data.measurements, newMeasurement],
+    };
+    
+    await saveData(updatedData);
+    return newMeasurement;
+  };
+
+  const getUserRoutines = (userId?: string) => {
+    if (!userId) return data.routines.filter(r => r.type === 'generic');
+    return data.routines.filter(r => r.type === 'generic' || r.userId === userId);
+  };
+
+  const getUserDietPlans = (userId?: string) => {
+    if (!userId) return data.dietPlans.filter(d => d.type === 'generic');
+    return data.dietPlans.filter(d => d.type === 'generic' || d.userId === userId);
+  };
+
+  const assignDietToClient = async (clientId: string, dietPlanId: string) => {
+    const dietPlan = data.dietPlans.find(d => d.id === dietPlanId);
+    if (!dietPlan) return;
+
+    // Remove any existing specific diet plan for this user
+    const filteredDietPlans = data.dietPlans.filter(
+      d => !(d.type === 'specific' && d.userId === clientId)
+    );
+
+    // Create a copy of the diet plan for the specific user
+    const userDietPlan: DietPlan = {
+      ...dietPlan,
+      id: `diet_${Date.now()}`,
+      userId: clientId,
+      type: 'specific',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const updatedData = {
+      ...data,
+      dietPlans: [...filteredDietPlans, userDietPlan],
+    };
+
+    await saveData(updatedData);
+    return userDietPlan;
+  };
+
+  const assignRoutineToClient = async (clientId: string, routineId: string) => {
+    const routine = data.routines.find(r => r.id === routineId);
+    if (!routine) return;
+
+    // Create a copy of the routine for the specific user
+    const userRoutine: Routine = {
+      ...routine,
+      id: `routine_${Date.now()}`,
+      userId: clientId,
+      type: 'specific',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const updatedData = {
+      ...data,
+      routines: [...data.routines, userRoutine],
+    };
+
+    await saveData(updatedData);
+    return userRoutine;
+  };
+
+  const updateRoutine = async (updatedRoutine: Routine) => {
+    const updatedData = {
+      ...data,
+      routines: data.routines.map(routine => 
+        routine.id === updatedRoutine.id ? updatedRoutine : routine
+      ),
+    };
+    
+    await saveData(updatedData);
+    return updatedRoutine;
+  };
+
+  const updateDietPlan = async (updatedDietPlan: DietPlan) => {
+    const updatedData = {
+      ...data,
+      dietPlans: data.dietPlans.map(dietPlan => 
+        dietPlan.id === updatedDietPlan.id ? updatedDietPlan : dietPlan
+      ),
+    };
+    
+    await saveData(updatedData);
+    return updatedDietPlan;
+  };
+
+  return {
+    ...data,
+    isLoading,
+    addRoutine,
+    addDietPlan,
+    addWeightRecord,
+    addMeasurement,
+    getUserRoutines,
+    getUserDietPlans,
+    assignDietToClient,
+    assignRoutineToClient,
+    updateRoutine,
+    updateDietPlan,
+  };
+});

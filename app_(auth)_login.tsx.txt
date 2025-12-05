@@ -1,0 +1,327 @@
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  Alert,
+  ActivityIndicator,
+} from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Dumbbell, User, Lock, Building2, Shield } from 'lucide-react-native';
+import { useAuth } from '@/hooks/auth-context';
+import { router } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+export default function LoginScreen() {
+  const { loginAsGym, loginAsClient, loginAsMaster, authState, isLoading: authLoading } = useAuth();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loginType, setLoginType] = useState<'client' | 'gym' | 'master'>('client');
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (authState.role) {
+      router.replace('/(tabs)/(home)');
+    }
+  }, [authState.role]);
+
+  const handleLogin = async () => {
+    if (!email || !password) {
+      Alert.alert('Error', 'Por favor completa todos los campos');
+      return;
+    }
+
+    setIsLoading(true);
+    
+    try {
+      let success = false;
+      
+      if (loginType === 'gym') {
+        success = await loginAsGym(email, password);
+      } else if (loginType === 'master') {
+        success = await loginAsMaster(email, password);
+      } else {
+        success = await loginAsClient(email, password);
+      }
+
+      if (success) {
+        router.replace('/(tabs)/(home)');
+      } else {
+        Alert.alert('Error', 'Credenciales incorrectas');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Ocurrió un error al iniciar sesión');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (authLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#10B981" />
+      </View>
+    );
+  }
+
+  return (
+    <LinearGradient
+      colors={['#1F2937', '#111827']}
+      style={styles.container}
+    >
+      <SafeAreaView style={styles.safeArea}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.keyboardView}
+        >
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.logoContainer}>
+              <View style={styles.logoCircle}>
+                <Dumbbell size={48} color="#10B981" />
+              </View>
+              <Text style={styles.appName}>GymManager Pro</Text>
+              <Text style={styles.tagline}>Gestión integral para gimnasios</Text>
+            </View>
+
+            <View style={styles.formContainer}>
+              <View style={styles.toggleContainer}>
+                <TouchableOpacity
+                  style={[styles.toggleButton, loginType === 'client' && styles.toggleButtonActive]}
+                  onPress={() => setLoginType('client')}
+                >
+                  <User size={18} color={loginType === 'client' ? '#fff' : '#9CA3AF'} />
+                  <Text style={[styles.toggleText, loginType === 'client' && styles.toggleTextActive]}>
+                    Cliente
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.toggleButton, loginType === 'gym' && styles.toggleButtonActive]}
+                  onPress={() => setLoginType('gym')}
+                >
+                  <Building2 size={18} color={loginType === 'gym' ? '#fff' : '#9CA3AF'} />
+                  <Text style={[styles.toggleText, loginType === 'gym' && styles.toggleTextActive]}>
+                    Gimnasio
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.toggleButton, loginType === 'master' && styles.toggleButtonActive]}
+                  onPress={() => setLoginType('master')}
+                >
+                  <Shield size={18} color={loginType === 'master' ? '#fff' : '#9CA3AF'} />
+                  <Text style={[styles.toggleText, loginType === 'master' && styles.toggleTextActive]}>
+                    Master
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.inputContainer}>
+                <User size={20} color="#9CA3AF" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Email"
+                  placeholderTextColor="#9CA3AF"
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+              </View>
+
+              <View style={styles.inputContainer}>
+                <Lock size={20} color="#9CA3AF" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Contraseña"
+                  placeholderTextColor="#9CA3AF"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry
+                />
+              </View>
+
+              <TouchableOpacity
+                style={styles.loginButton}
+                onPress={handleLogin}
+                disabled={isLoading}
+              >
+                <LinearGradient
+                  colors={['#10B981', '#059669']}
+                  style={styles.loginButtonGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                >
+                  {isLoading ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.loginButtonText}>Iniciar Sesión</Text>
+                  )}
+                </LinearGradient>
+              </TouchableOpacity>
+
+              <View style={styles.demoContainer}>
+                <Text style={styles.demoTitle}>Cuentas Demo:</Text>
+                <View style={styles.demoRow}>
+                  <Text style={styles.demoLabel}>Cliente:</Text>
+                  <Text style={styles.demoValue}>juan@email.com / user123</Text>
+                </View>
+                <View style={styles.demoRow}>
+                  <Text style={styles.demoLabel}>Gimnasio:</Text>
+                  <Text style={styles.demoValue}>admin@powerfit.com / admin123</Text>
+                </View>
+                <View style={styles.demoRow}>
+                  <Text style={styles.demoLabel}>Master:</Text>
+                  <Text style={styles.demoValue}>master@gymapp.com / master2024</Text>
+                </View>
+              </View>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </LinearGradient>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  safeArea: {
+    flex: 1,
+  },
+  keyboardView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    padding: 20,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#1F2937',
+  },
+  logoContainer: {
+    alignItems: 'center',
+    marginBottom: 40,
+  },
+  logoCircle: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  appName: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 8,
+  },
+  tagline: {
+    fontSize: 16,
+    color: '#9CA3AF',
+  },
+  formContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 20,
+    padding: 24,
+  },
+  toggleContainer: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    borderRadius: 12,
+    padding: 4,
+    marginBottom: 24,
+  },
+  toggleButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 8,
+    gap: 8,
+  },
+  toggleButtonActive: {
+    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+  },
+  toggleText: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    fontWeight: '600',
+  },
+  toggleTextActive: {
+    color: '#10B981',
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 12,
+    marginBottom: 16,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  inputIcon: {
+    marginRight: 12,
+  },
+  input: {
+    flex: 1,
+    paddingVertical: 16,
+    fontSize: 16,
+    color: '#fff',
+  },
+  loginButton: {
+    marginTop: 8,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  loginButtonGradient: {
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  loginButtonText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  demoContainer: {
+    marginTop: 24,
+    padding: 16,
+    backgroundColor: 'rgba(16, 185, 129, 0.05)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.2)',
+  },
+  demoTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#10B981',
+    marginBottom: 8,
+  },
+  demoRow: {
+    marginBottom: 4,
+  },
+  demoLabel: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    fontWeight: '600',
+  },
+  demoValue: {
+    fontSize: 12,
+    color: '#D1D5DB',
+  },
+});
